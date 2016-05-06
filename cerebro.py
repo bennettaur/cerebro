@@ -25,11 +25,11 @@ class AttackRunner(object):
 
         if use_curl:
             from tornado.curl_httpclient import CurlAsyncHTTPClient
-            AsyncHTTPClient.configure(CurlAsyncHTTPClient)
+            AsyncHTTPClient.configure(CurlAsyncHTTPClient, max_clients=self.concurrency)
         else:
-            AsyncHTTPClient.configure(SimpleAsyncHTTPClient)
+            AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=self.concurrency)
         self.http_client = AsyncHTTPClient(io_loop=self.io_loop)
-        self.queue = queues.Queue(maxsize=concurrency)
+        self.queue = queues.Queue()
         self.attack_map = itertools.product(self.ports, self.ip_list)
 
     @gen.coroutine
@@ -51,6 +51,7 @@ class AttackRunner(object):
 
     @gen.coroutine
     def consumer(self):
+        http_client = AsyncHTTPClient(io_loop=self.io_loop, force_instance=True)
         while True:
             port, ip = yield self.queue.get()
 
@@ -58,11 +59,12 @@ class AttackRunner(object):
             print "Scanning {}".format(target)
 
             try:
-                result = yield self.http_client.fetch(
+                result = yield http_client.fetch(
                     target,
                     raise_error=False,
                     decompress_response=False,
                     follow_redirects=False,
+                    connect_timeout=self.request_timeout,
                     request_timeout=self.request_timeout
                 )
             except:
@@ -86,7 +88,8 @@ class AttackRunner(object):
     @gen.coroutine
     def run(self):
         # Start consumer without waiting (since it never finishes).
-        self.io_loop.spawn_callback(self.consumer)
+        for _ in xrange(self.concurrency):
+            self.io_loop.spawn_callback(self.consumer)
         yield self.producer()     # Wait for producer to put all tasks.
         yield self.queue.join()       # Wait for consumer to finish all tasks.
         self.io_loop.stop()
@@ -102,7 +105,7 @@ def main():
         '-c',
         '--concurrency',
         type=int,
-        default=0,
+        default=1000,
         help="The number of simultaneous connections that are allowed. Default is unlimited"
     )
     parser.add_argument(
@@ -186,7 +189,8 @@ def main():
         args.use_curl
     )
 
-    io_loop.run_sync(runner.run)
+    io_loop.add_callback(runner.run)
+    io_loop.start()
 
     print "Finished running!"
 
