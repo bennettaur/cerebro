@@ -101,6 +101,7 @@ class HTTPAttackRunner(BaseAttackRunner):
                 try:
                     if result.code != 599:
                         self.result_file.write("{},{},{}\n".format(ip, port, result.code))
+                        self.result_file.flush()
                 except AttributeError:
                     pass
                 except:
