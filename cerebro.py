@@ -1,7 +1,9 @@
 import argparse
+import functools
 import itertools
 import logging
 import socket
+import ssl
 import time
 
 from tornado import ioloop, gen, queues
@@ -114,36 +116,56 @@ class HTTPAttackRunner(BaseAttackRunner):
 
 class TCPHTTPAttackRunner(BaseAttackRunner):
 
-    PAYLOAD = (
-        "GET {path} HTTP/1.1\r\n"
-        "{host}"
-        "Connection: keep-alive\r\n"
-        "Pragma: no-cache\r\n"
-        "Cache-Control: no-cache\r\n"
-        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\n"
-        "{user_agent}"
-        "Accept-Encoding: gzip, deflate, sdch\r\n"
-        "Accept-Language: en-US,en;q=0.8\r\n"
-        "\r\n"
-    )
+    PAYLOAD = [
+        "GET {path} HTTP/1.0\r\n",
+        "",
+        "",
+        "\r\n",
+    ]
     DEFAULT_USER_AGENT = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.86 Safari/537.36"
     )
 
-    def __init__(self, io_loop, ip_list, ports, concurrency, rate, request_timeout, path, ssl, user_agent=None, host=None):
+    def __init__(self,
+                 io_loop,
+                 ip_list,
+                 ports,
+                 concurrency,
+                 rate,
+                 request_timeout,
+                 path,
+                 try_ssl,
+                 user_agent=None,
+                 host=None,
+                 use_ip_as_host=False):
         super(TCPHTTPAttackRunner, self).__init__(io_loop, ip_list, ports, concurrency, rate, request_timeout)
         self.path = path
-        self.ssl = ssl
+        self.ssl = try_ssl
+        self.use_ip_as_host = use_ip_as_host
         self.result_file = open("results.csv", "w")
+        self.ssl_context = ssl._create_unverified_context()
 
-        host_header = ""
+        self.payload = [
+            "GET {path} HTTP/1.0\r\n",
+            "",
+            "",
+            "\r\n",
+        ]
+
         if host is not None:
             host_header = "Host: {}\r\n".format(host)
+            self.payload[1] = host_header
 
         user_agent_header = "User-Agent: {}\r\n".format((user_agent or self.DEFAULT_USER_AGENT))
+        self.payload[2] = user_agent_header
 
-        self.payload = self.PAYLOAD.format(path=path, host=host_header, user_agent=user_agent_header)
+    @staticmethod
+    def close_stream(stream):
+        try:
+            stream.close()
+        except:
+            pass
 
     @gen.coroutine
     def consumer(self):
@@ -160,13 +182,17 @@ class TCPHTTPAttackRunner(BaseAttackRunner):
                 yield gen.sleep(delay)
             port, ip = yield self.queue.get()
 
+            result = ''
+
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
             iostream = IOStream(s)
 
-            result = ''
+            callback = functools.partial(self.close_stream, iostream)
 
-            timeout = self.io_loop.call_later(self.request_timeout, iostream.close)
+            timeout = self.io_loop.call_later(self.request_timeout, callback)
+
             self.requests_started += 1
+            ssl_success = False
 
             try:
                 yield iostream.connect((ip, port))
@@ -175,8 +201,41 @@ class TCPHTTPAttackRunner(BaseAttackRunner):
             except:
                 logging.exception("Error connecting to {}:{}".format(ip, port))
             else:
+                if self.ssl:
+                    try:
+                        iostream = yield iostream.start_tls(False, ssl_options=self.ssl_context)
+                    except:
+                        try:
+                            iostream.close()
+                        except:
+                            pass
+                        # SSL failed, need to recreate the connection
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+                        iostream = IOStream(s)
+
+                        ssl_success = False
+                        try:
+                            self.io_loop.remove_timeout(timeout)
+                        except:
+                            pass
+
+                        timeout = self.io_loop.call_later(self.request_timeout, callback)
+
+                        try:
+                            yield iostream.connect((ip, port))
+                        except:
+                            logging.exception("Error re-connecting to {}:{} after ssl attempt".format(ip, port))
+                    else:
+                        ssl_success = True
+
                 try:
-                    yield iostream.write(self.payload)
+                    # finish building the request payload
+                    if self.use_ip_as_host and self.payload[1] == "":
+                        self.payload[1] = "Host: {}\r\n".format(ip)
+
+                    payload = "".join(self.payload)
+
+                    yield iostream.write(payload)
                 except StreamClosedError:
                     pass
                 except:
@@ -194,9 +253,16 @@ class TCPHTTPAttackRunner(BaseAttackRunner):
             except:
                 pass
 
-            if len(result) > 0 and 'HTTP' in result:
+            try:
+                iostream.close()
+            except:
+                pass
 
-                self.result_file.write("{}, {}, {}\n".format(ip, port, result.strip()))
+            if len(result) > 0 or ssl_success:
+                result_string = result.strip()
+                if ssl_success:
+                    result_string += " + SSL"
+                self.result_file.write("{}, {}, {}\n".format(ip, port, result_string))
 
             try:
                 self.queue.task_done()
@@ -239,7 +305,7 @@ def main():
         '-t',
         '--request_timeout',
         type=int,
-        default=2,
+        default=3,
         help="How long to wait before timing out a request in seconds. Default is 2"
     )
     parser.add_argument(
@@ -275,6 +341,19 @@ def main():
         '--user_agent',
         default=None,
         help="User Agent String to send with requests"
+    )
+    parser.add_argument(
+        '-q',
+        '--host_header',
+        default=None,
+        help="Host header String to send with requests"
+    )
+    parser.add_argument(
+        '-v',
+        '--use_ip_as_host',
+        default=False,
+        action='store_true',
+        help="Attempt to use the supplied IP/domain as the Host header String to send with requests"
     )
 
     args = parser.parse_args()
@@ -324,7 +403,9 @@ def main():
             args.request_timeout,
             args.path,
             args.https,
-            args.user_agent
+            args.user_agent,
+            args.host_header,
+            args.use_ip_as_host
         )
 
     io_loop.add_callback(runner.run)
