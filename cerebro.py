@@ -264,6 +264,7 @@ class TCPHTTPAttackRunner(BaseAttackRunner):
                 if ssl_success:
                     result_string += " + SSL"
                 self.result_file.write("{}, {}, {}\n".format(ip, port, result_string))
+                self.result_file.flush()
 
             try:
                 self.queue.task_done()
