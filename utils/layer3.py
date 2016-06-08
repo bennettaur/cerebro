@@ -42,18 +42,13 @@ class Layer3Socket(object):
 
         socket_fails = 0
 
-        loop = True
-
-        while loop:
-            for p in x:
-                try:
-                    self.socket.send(p)
-                except:
-                    logger.exception("Exception while trying to send data")
-                    if socket_fails < 5:
-                        self.recreate_socket()
-                        socket_fails += 1
-                    else:
-                        raise
+        for p in x:
+            try:
+                self.socket.send(p)
+            except:
+                logger.exception("Exception while trying to send data")
+                if socket_fails < 5:
+                    self.recreate_socket()
+                    socket_fails += 1
                 else:
-                    loop = False
+                    raise
