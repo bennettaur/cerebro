@@ -30,8 +30,8 @@ class HTTPScanRunner(BaseScanRunner):
 
     @gen.coroutine
     def consumer(self):
-        self.active_workers += 1
         http_client = AsyncHTTPClient(io_loop=self.io_loop, force_instance=True)
+        self.active_workers += 1
         while True:
             success = False
             try:
@@ -40,7 +40,7 @@ class HTTPScanRunner(BaseScanRunner):
                 elapsed_time = now - self.start
                 current_rate = self.requests_started/elapsed_time
 
-                if 0 < self.rate < current_rate:
+                if elapsed_time > 2 and 0 < self.rate < current_rate:
                     delay = (self.requests_started - (self.rate * elapsed_time))/self.rate
                     print "Current rate is {} so we're throttling! Sleeping for {} seconds".format(current_rate, delay)
                     yield gen.sleep(delay)
@@ -75,13 +75,14 @@ class HTTPScanRunner(BaseScanRunner):
             except:
                 logging.exception("Consumer almost crashed from uncaught error")
             finally:
-                self.completed_scans.append((port, ip))
                 try:
                     self.queue.task_done()
                 except queues.QueueEmpty:
                     pass
                 except ValueError:
                     logging.exception("A worker got a ValueError while marking a task as done")
+
+                self.completed_scans.append((port, ip))
         self.active_workers -= 1
 
 
@@ -147,7 +148,7 @@ class TCPHTTPScanRunner(BaseScanRunner):
                 elapsed_time = now - self.start
                 current_rate = self.requests_started/elapsed_time
 
-                if 0 < self.rate < current_rate:
+                if elapsed_time > 2 and 0 < self.rate < current_rate:
                     delay = (self.requests_started - (self.rate * elapsed_time))/self.rate
                     print "Current rate is {} so we're throttling! Sleeping for {} seconds".format(current_rate, delay)
                     yield gen.sleep(delay)
