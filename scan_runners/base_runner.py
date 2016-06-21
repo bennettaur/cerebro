@@ -1,4 +1,5 @@
 import itertools
+import os
 import pprint
 import logging
 import time
@@ -23,7 +24,15 @@ class BaseScanRunner(object):
         self.last_checked_complete_size = 0
         self.active_workers = 0
 
-        self.result_file = open("results.csv", "w")
+        self.outdir = "results"
+
+        if not os.path.exists(self.outdir):
+            os.mkdir(self.outdir)
+
+        self.result_filename = os.path.join(self.outdir, "results.csv")
+        self.progress_filename = os.path.join(self.outdir, "progress.csv")
+        self.result_file = open(self.result_filename, "w")
+        self.progress_file = open(self.progress_filename, "w")
 
         self.start = None
         self.requests_started = 0

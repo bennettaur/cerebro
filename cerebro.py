@@ -90,6 +90,13 @@ def main():
         action='store_true',
         help="Attempt to use the supplied IP/domain as the Host header String to send with requests"
     )
+    parser.add_argument(
+        '-l',
+        '--increment',
+        type=int,
+        default=1000,
+        help="How long to wait before timing out a request in seconds. Default is 2"
+    )
 
     args = parser.parse_args()
 
@@ -113,7 +120,10 @@ def main():
         else:
             ports.append(int(port))
 
+    ports.sort()
+
     io_loop = ioloop.IOLoop.current()
+    
 
     if args.http_client:
         runner = HTTPScanRunner(

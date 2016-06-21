@@ -6,6 +6,8 @@ __author__ = 'bennettaur'
 
 def setup_logging(name, add_console=False):
     log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.mkdir(log_dir)
     log_format = '%(asctime)s--%(name)s--%(levelname)s: %(message)s'
     date_format = '%m/%d/%Y %I:%M:%S %p'
     formatter = logging.Formatter(log_format, date_format)

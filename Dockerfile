@@ -24,13 +24,13 @@ wget http://sourceforge.net/projects/pylibpcap/files/pylibpcap/0.6.4/pylibpcap-0
 tar zxf pylibpcap-0.6.4.tar.gz
 
 # Install libdnet
-WORKDIR /cloud/libdnet-1.12
+WORKDIR /cerebro/libdnet-1.12
 RUN ./configure && make && make install
-WORKDIR /cloud/libdnet-1.12/python
+WORKDIR /cerebro/libdnet-1.12/python
 RUN python ./setup.py build && python ./setup.py install
 
 #Install pylibpcap
-WORKDIR /cloud/pylibpcap-0.6.4
+WORKDIR /cerebro/pylibpcap-0.6.4
 RUN python setup.py build && python setup.py install
 
 RUN mkdir -p /var/log/cerebro

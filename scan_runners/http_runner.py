@@ -75,6 +75,8 @@ class HTTPScanRunner(BaseScanRunner):
             except:
                 logging.exception("Consumer almost crashed from uncaught error")
             finally:
+                self.progress_file.write("{},{}\n".format(port, ip))
+                self.completed_scans.append((port, ip))
                 try:
                     self.queue.task_done()
                 except queues.QueueEmpty:
@@ -82,7 +84,6 @@ class HTTPScanRunner(BaseScanRunner):
                 except ValueError:
                     logging.exception("A worker got a ValueError while marking a task as done")
 
-                self.completed_scans.append((port, ip))
         self.active_workers -= 1
 
 
@@ -238,6 +239,7 @@ class TCPHTTPScanRunner(BaseScanRunner):
             except:
                 logging.exception("Consumer almost crashed from uncaught error")
             finally:
+                self.progress_file.write("{},{}\n".format(port, ip))
                 self.completed_scans.append((port, ip))
                 try:
                     self.queue.task_done()

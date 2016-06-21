@@ -133,8 +133,10 @@ class TCPDumpSniffer(object):
         self.running = True
 
         Subprocess.initialize(self.io_loop)
+        tcpdump_command = self.build_tcpdump_command()
+        logger.info("Running tcpdump sniffer: '{}'".format(" ".join(tcpdump_command)))
         self.tcpdump_process = Subprocess(
-            self.build_tcpdump_command(),
+            tcpdump_command,
             stdout=Subprocess.STREAM,
             stderr=Subprocess.STREAM,
             io_loop=self.io_loop,
