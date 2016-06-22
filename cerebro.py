@@ -95,7 +95,7 @@ def main():
         '--increment',
         type=int,
         default=1000,
-        help="How long to wait before timing out a request in seconds. Default is 2"
+        help="Scan ports in increments and write the results out to a file"
     )
 
     args = parser.parse_args()
@@ -123,7 +123,7 @@ def main():
     ports.sort()
 
     io_loop = ioloop.IOLoop.current()
-    
+
 
     if args.http_client:
         runner = HTTPScanRunner(

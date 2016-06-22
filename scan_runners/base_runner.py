@@ -12,7 +12,7 @@ __author__ = 'bennettaur'
 
 class BaseScanRunner(object):
 
-    def __init__(self, io_loop, ip_list, ports, concurrency, rate, request_timeout, idle_timeout=15000):
+    def __init__(self, io_loop, ip_list, ports, concurrency, rate, request_timeout, idle_timeout=30000):
         self.io_loop = io_loop
         self.ip_list = ip_list
         self.ports = ports
@@ -44,7 +44,7 @@ class BaseScanRunner(object):
 
     def check_for_idle(self):
         completed_count = len(self.completed_scans)
-        if self.last_checked_complete_size <= completed_count:
+        if self.last_checked_complete_size == completed_count:
             logging.info("Scan has be idle for {}. Stopping it now.".format(self.idle_timeout))
             self.io_loop.stop()
 
