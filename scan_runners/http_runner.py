@@ -76,6 +76,7 @@ class HTTPScanRunner(BaseScanRunner):
                 logging.exception("Consumer almost crashed from uncaught error")
             finally:
                 self.progress_file.write("{},{}\n".format(port, ip))
+                self.progress_file.flush()
                 self.completed_scans.append((port, ip))
                 try:
                     self.queue.task_done()
@@ -240,6 +241,7 @@ class TCPHTTPScanRunner(BaseScanRunner):
                 logging.exception("Consumer almost crashed from uncaught error")
             finally:
                 self.progress_file.write("{},{}\n".format(port, ip))
+                self.progress_file.flush()
                 self.completed_scans.append((port, ip))
                 try:
                     self.queue.task_done()
